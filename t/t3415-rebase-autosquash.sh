@@ -232,6 +232,50 @@ test_expect_success 'auto squash that matches longer sha1' '
 	test_line_count = 1 actual
 '
 
+test_expect_success 'auto squash that matches regex' '
+	git reset --hard base &&
+	git commit --allow-empty -m "hay needle hay" &&
+	git commit --allow-empty -m "fixup! :/[n]eedle" &&
+	GIT_SEQUENCE_EDITOR="cat >tmp" git rebase --autosquash -i HEAD^^ &&
+	sed -ne "/^[^#]/{s/[0-9a-f]\{7,\}/HASH/g;p;}" tmp >actual &&
+	cat <<-EOF >expect &&
+	pick HASH hay needle hay # empty
+	fixup HASH fixup! :/[n]eedle # empty
+	EOF
+	test_cmp expect actual
+'
+
+test_expect_success 'auto squash of fixup commit that matches branch name' '
+	git reset --hard base &&
+	git commit --allow-empty -m "wip commit (just a prefix match so overshadowed by branch)" &&
+	git commit --allow-empty -m "tip of wip" &&
+	git branch wip &&
+	git commit --allow-empty -m "unrelated commit" &&
+	git commit --allow-empty -m "fixup! wip" &&
+	GIT_SEQUENCE_EDITOR="cat >tmp" git rebase --autosquash -i HEAD^^^^ &&
+	sed -ne "/^[^#]/{s/[0-9a-f]\{7,\}/HASH/g;p;}" tmp >actual &&
+	cat <<-EOF >expect &&
+	pick HASH wip commit (just a prefix match so overshadowed by branch) # empty
+	pick HASH tip of wip # empty
+	fixup HASH fixup! wip # empty
+	pick HASH unrelated commit # empty
+	EOF
+	test_cmp expect actual
+'
+
+test_expect_success 'auto squash of fixup commit that matches branch name which points back to fixup commit' '
+	git reset --hard base &&
+	git commit --allow-empty -m "fixup! self-cycle" &&
+	git branch self-cycle &&
+	GIT_SEQUENCE_EDITOR="cat >tmp" git rebase --autosquash -i HEAD^^ &&
+	sed -ne "/^[^#]/{s/[0-9a-f]\{7,\}/HASH/g;p;}" tmp >actual &&
+	cat <<-EOF >expect &&
+	pick HASH second commit
+	pick HASH fixup! self-cycle # empty
+	EOF
+	test_cmp expect actual
+'
+
 test_auto_commit_flags () {
 	git reset --hard base &&
 	echo 1 >file1 &&
